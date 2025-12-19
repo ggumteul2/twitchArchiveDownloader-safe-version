@@ -1,7 +1,7 @@
 import requests
 import sys
 import re
-import os
+import functions as fn
 
 app_token = "s5498lg7h36kk5ml7f7jgw180c9rp2"
 client_id = "u1azns9tgoo4qkrtaj95mi4jkyj1dy"
@@ -19,6 +19,7 @@ except:
 req = requests.get(f'https://api.twitch.tv/helix/videos?id={vid_id}', headers={"Authorization":f"Bearer {app_token}", "Client-Id":f"{client_id}"})
 json_data = req.json()
 thumbnail_url = json_data["data"][0]["thumbnail_url"]
+title = json_data["data"][0]["title"]
 
 if thumbnail_url == "https://vod-secure.twitch.tv/_404/404_processing_%{width}x%{height}.png":
     print("아직 처리중인 동영상입니다")
@@ -34,4 +35,3 @@ m3u8_url = "https://d3vd9lfkzbru3h.cloudfront.net/" + keyword + "/chunked/index-
 
 req = requests.get(m3u8_url)
 length = len(re.compile("[0-9]*[.]ts").findall(req.text))
-print(length)
