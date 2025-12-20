@@ -2,7 +2,6 @@ import requests
 import sys
 import re
 import functions as fn
-
 app_token = "s5498lg7h36kk5ml7f7jgw180c9rp2"
 client_id = "u1azns9tgoo4qkrtaj95mi4jkyj1dy"
 #토큰 조회
