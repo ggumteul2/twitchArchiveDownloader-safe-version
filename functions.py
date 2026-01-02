@@ -6,6 +6,7 @@ import aiofiles
 import aiofiles.os
 import ffmpeg
 import shutil
+from tqdm import tqdm
 
 def nameConvert(name: str):
     if '\\' or '/' or ':' or '*' or '?' or '"' or '<' or '>' or '|' in name:
@@ -31,10 +32,10 @@ def makeFolder(name: str, dir: str):
     try:
         os.mkdir(f"{dir}/{name}")
     except PermissionError:
-        print("권한이 부족합니다. 프로그램을 종료합니다")
+        print("insufficient privileges. Shutting down the program")
         sys.exit(0)
     except Exception as e:
-        print(f'예기치 않은 오류가 발생했습니다 : {e}. 프로그램을 종료합니다')
+        print(f'An unexpected error occurred: {e}. Shutting down the program')
         sys.exit(0)
 
 
@@ -51,6 +52,7 @@ class TSFilesDownloader:
         self.channel_name = channel_name
         self.muted = muted
         self.ts = list()
+        
         for i in range(start_num, end_num + 1):
             self.ts.append(i)
             if i == start_num:
@@ -74,18 +76,21 @@ class TSFilesDownloader:
                     value = int(value)
                     if index == 0 and value != 0:
                         for i in range(0,self.lim):
+                            if value - i - 1 < self.start_num:
+                                continue
                             self.ts.append(value - i - 1)
                     self.ts.append(value)
-                    
+            self.pbar = tqdm(range(start_num, end_num + 1), desc="Processing", initial=self.end_num - self.start_num + 1 - len(self.ts), unit="ts files")
             return
+        self.pbar = tqdm(range(start_num, end_num + 1), desc="Processing", unit="ts files")
         try:
             with open(f"{dir}/{name}/temp.txt", "w") as f:
                 f.write(ts_text)
         except PermissionError:
-            print("권한이 부족합니다. 프로그램을 종료합니다")
+            print("insufficient privileges. Shutting down the program")
             sys.exit(0)
         except Exception as e:
-            print(f'예기치 않은 오류가 발생했습니다 : {e}. 프로그램을 종료합니다')
+            print(f'An unexpected error occurred: {e}. Shutting down the program')
             sys.exit(0)
     
     async def downloadFile(self, num: int):
@@ -103,11 +108,12 @@ class TSFilesDownloader:
                 async with aiofiles.open(f"{self.dir}\\{self.name}\\{num}.ts", 'ab') as file:
                     async for chunk in req.content.iter_chunked(8 * 1024):
                         await file.write(chunk)
-            if f"{num}-unmuted.ts" in self.muted:
-                log = f"{num}-muted.ts download complete"
-            else:
-                log = f"{num}.ts download complete"
-            print(log)
+            #if f"{num}-unmuted.ts" in self.muted:
+            ##    log = f"{num}-muted.ts download complete"
+            ##else:
+            ##    log = f"{num}.ts download complete"
+            #print(log)
+            self.pbar.update(1)
             ts_text = ""            
             for index, value in enumerate(self.ts):
                 if index == 0:
@@ -134,6 +140,7 @@ class TSFilesDownloader:
                 await asyncio.gather(*[self.downloadFile(int(index)) for index in current])
             if os.path.isfile(f"{self.dir}/{self.name}/temp.txt"):
                 os.remove(f"{self.dir}/{self.name}/temp.txt")
+            self.pbar.close()
             self.concat()
 
     def download(self):
@@ -164,7 +171,7 @@ class TSFilesDownloader:
             os.rename(f"{self.dir}/{self.name}/{ts_muted}-unmuted.ts", f"{self.dir}/{self.name}/{ts_muted}.ts")
                 
         ffmpeg.input(f"{self.dir}/{self.name}/concat.txt", format="concat", safe=0).output(videoName, c="copy").run()
-        delete_folder = input("임시폴더를 삭제할까요? >>\n")
+        delete_folder = input("Do you want to delete temporary folders? (y/n) >>\n")
         if delete_folder != "y":
             sys.exit(0)
         shutil.rmtree(f"{self.dir}/{self.name}")
@@ -204,13 +211,5 @@ def process_and_match_stream(input_file, output_file, ref_file):
         output.run(capture_stdout=True, capture_stderr=True)
     except ffmpeg.Error:
         raise
-
-def main():
-    name = input("만들 폴더의 이름을 입력해 주세요\n>> ")
-    dir = input("만들 폴더의 경로를 입력해 주세요\n>> ")
-    makeFolder(name, dir)
-
-if __name__ == "__main__":
-    main()
     
     
