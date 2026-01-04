@@ -8,6 +8,7 @@ mode = input("Please choose the mode\n==============================\n0 : downlo
 match mode:
     case "0":
         url = input("Please enter url of Twitch archive (https://www.twitch.tv/videos/~)\n>> ")
+        url = url.split("?")[0] 
     
     case "1":
         username = input("Please enter username of Twitch channel\n>> ")
@@ -20,5 +21,17 @@ match mode:
         
 ts_tamplet_url, end_num, channel_name, date, title, muted = twitchAPI.getTSURL(url)
 print("checking pre-downloaded tsfiles")
-downloader = fn.TSFilesDownloader(end_num, title, ts_tamplet_url, os.getcwd(), muted, 15, date=date, channel_name=channel_name)
+archive_id = url.split("/videos/")[1].split("?")[0]
+
+#名前を修正
+downloader = fn.TSFilesDownloader(
+    end_num=end_num,
+    name=archive_id,
+    url=ts_tamplet_url,
+    dir=os.getcwd(),
+    muted=muted,
+    lim=15,
+    date=date,
+    channel_name=channel_name
+)
 downloader.download()
