@@ -1,3 +1,6 @@
+It's the safe mode of twitchArchiveDownloader which is for pc that does not supports languages which are not English
+
+
 1. Install Python
 2. Open terminal and enter "pip install -r requirements.txt"
 3. Install ffmpeg(https://www.ffmpeg.org/download.html)
