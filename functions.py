@@ -61,17 +61,39 @@ class TSFilesDownloader:
         # TS番号リスト作成
         for i in range(start_num, end_num + 1):
             self.ts.append(i)
-
+            if i == start_num:
+                ts_text = i
+                continue
+            ts_text = f"{ts_text}\n{i}"
         # 途中再開チェック
         if os.path.isfile(f"{self.dir}/{self.name}/{end_num}.ts"):
             self.concat()
             return
-
-        self.pbar = tqdm(
-            range(start_num, end_num + 1),
-            desc="Processing",
-            unit="ts files"
-        )
+        
+        #임시파일 생성
+        if os.path.isfile(f"{dir}/{self.name}/temp.txt"):
+            self.ts = list()
+            with open(f"{dir}/{self.name}/temp.txt", "r") as f:
+                ts = f.readlines()
+                for index, value in enumerate(ts):
+                    value = int(value)
+                    if index == 0 and value != 0:
+                        for i in range(0,self.lim):
+                            if value - i - 1 < self.start_num:
+                                continue
+                            self.ts.append(value - i - 1)
+                    self.ts.append(value)
+            self.pbar = tqdm(range(start_num, end_num + 1), desc="Processing", initial=self.end_num - self.start_num + 1 - len(self.ts), unit="ts files")
+            return
+        self.pbar = tqdm(range(start_num, end_num + 1), desc="Processing", unit="ts files")
+        try:
+            with open(f"{dir}/{self.name}/temp.txt", "w") as f:
+                f.write(ts_text)
+        except PermissionError:
+            print("insufficient privileges. Shutting down the program")
+            sys.exit(0)
+        except Exception as e:
+            print(f'An unexpected error occurred: {e}. Shutting down the program')
 
     async def downloadFile(self, num: int):
         file_path = f"{self.dir}/{self.name}/{num}.ts"
@@ -91,6 +113,21 @@ class TSFilesDownloader:
                         await file.write(chunk)
 
         self.pbar.update(1)
+        ts_text = ""            
+        for index, value in enumerate(self.ts):
+            if index == 0:
+                ts_text = value
+                continue
+            ts_text = f"{ts_text}\n{value}"
+        if ts_text == "":
+            async with aiofiles.open(f"{self.dir}/{self.name}/temp.txt", "w") as f:
+                pass
+        else:
+            async with aiofiles.open(f"{self.dir}/{self.name}/temp.txt", "w") as f:
+                await f.write(ts_text)
+
+    
+    
 
     async def downloadTSFiles(self):
         semaphore = asyncio.Semaphore(self.lim)
@@ -121,9 +158,24 @@ class TSFilesDownloader:
 
         with open(concat_path, "w", encoding="utf-8") as f:
             for i in range(self.start_num, self.end_num + 1):
-                path = f"{self.dir}/{self.name}/{i}.ts"
+                path = f"\'{self.dir}/{self.name}\'/{i}.ts"
                 f.write(f"file {path}\n")
 
+        for i in range(self.start_num, self.end_num + 1):
+            if f"{i}-unmuted.ts" in self.muted:
+                continue
+            ts_hasAudio = f"{i}.ts"
+            ts_hasAudio = f"{self.dir}/{self.name}/{ts_hasAudio}"
+            break
+        
+        for muted_ts in self.muted:
+            ts_muted = muted_ts.split("-")[0]
+            process_and_match_stream(f"{self.dir}/{self.name}/{ts_muted}.ts", f"{self.dir}/{self.name}/{ts_muted}-unmuted.ts", ts_hasAudio)
+            os.remove(f"{self.dir}/{self.name}/{ts_muted}.ts")
+            os.rename(f"{self.dir}/{self.name}/{ts_muted}-unmuted.ts", f"{self.dir}/{self.name}/{ts_muted}.ts")
+
+        
+        
         ffmpeg.input(
             concat_path,
             format="concat",
@@ -136,3 +188,36 @@ class TSFilesDownloader:
         delete_folder = input("Do you want to delete temporary folders? (y/n) >> ")
         if delete_folder == "y":
             shutil.rmtree(f"{self.dir}/{self.name}")
+
+
+def get_reference_audio_info(ref_file):
+    """기준 파일에서 첫 번째 오디오 스트림의 상세 정보를 추출합니다."""
+    probe = ffmpeg.probe(ref_file)
+    audio_info = next((s for s in probe['streams'] if s['codec_type'] == 'audio'), None)
+    return audio_info
+
+def process_and_match_stream(input_file, output_file, ref_file):
+    # 1. 기준 파일의 오디오 정보 가져오기
+    ref_audio = get_reference_audio_info(ref_file)
+    if not ref_audio:
+        return
+        # 2. 입력 스트림 설정
+    input_stream = ffmpeg.input(input_file)
+    
+    # 3. 기준 파일 순서(Audio:0, Video:1) 및 파라미터 강제 적용
+    output = ffmpeg.output(
+        input_stream['a:0'],  # Stream #0:0 (Audio)
+        input_stream['v:0'],  # Stream #0:1 (Video)
+        output_file,
+        acodec=ref_audio['codec_name'],
+        ar=ref_audio['sample_rate'],
+        ac=ref_audio['channels'],
+        vcodec='copy',
+        map_metadata=-1
+    ).overwrite_output()  # 오타 수정 완료
+
+    # 4. 실행
+    try:
+        output.run(capture_stdout=True, capture_stderr=True)
+    except ffmpeg.Error:
+        raise
