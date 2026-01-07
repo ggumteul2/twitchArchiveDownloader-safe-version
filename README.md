@@ -1,5 +1,5 @@
-It's the safe mode of twitchArchiveDownloader which is for pc that does not supports languages which are not English
-
+It's the safe version of twitchArchiveDownloader which is for pc that does not supports languages which are not English
+If you don't have to use safe version, please use the standard version(https://github.com/ggumteul2/twitchArchiveDownloader)
 
 1. Install Python
 2. Open terminal and enter "pip install -r requirements.txt"
